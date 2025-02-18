@@ -5,23 +5,23 @@ type Post {
   content: String!
   author: String!
   commentsEnabled: Boolean!
-  comments: [Comment!]!
 }
 
 type Comment {
   id: ID!
-  parent: ID!
   content: String!
   author: String!
+  postid: ID!
+  parentid: ID!
 }
-
 
 type Query {
   posts: [Post!]!
   post(id: ID!): Post
+  comments(id: ID!): [Comment!]!
 }
 
 type Mutation {
   createPost(title: String!, content: String!, author: String!): Post!
-  createComment(content: String!, author: String!, parent: ID!): Comment!
+  createComment(content: String!, author: String!, postid: ID!, parentid: ID!): Comment!
 }
