@@ -14,32 +14,39 @@ import (
 
 // CreatePost is the resolver for the createPost field.
 func (r *mutationResolver) CreatePost(ctx context.Context, title string, content string, author string) (*model.Post, error) {
-	
-	var emptyComments []*model.Comment
 	newPost := model.Post{
 		ID:              fmt.Sprintf("T%d", rand.Int()),
 		Title:           title,
 		Content:         content,
 		Author:          author,
 		CommentsEnabled: true,
-		Comments: emptyComments,
 	}
-	r.posts = append(r.posts, &newPost)
-	r.storage.posts[newPost.ID] = &newPost
 
+	r.storage.posts[newPost.ID] = &newPost
 	return &newPost, nil
 }
 
 // CreateComment is the resolver for the createComment field.
-func (r *mutationResolver) CreateComment(ctx context.Context, content string, author string, parent string) (*model.Comment, error) {
+func (r *mutationResolver) CreateComment(ctx context.Context, content string, author string, postid string, parentid string) (*model.Comment, error) {
 	newComment := model.Comment{
-		ID:      fmt.Sprintf("T%d", rand.Int()),
-		Content: content,
-		Author:  author,
-		Parent:  parent,
+		ID:       fmt.Sprintf("T%d", rand.Int()),
+		Content:  content,
+		Author:   author,
+		Postid:   postid,
+		Parentid: parentid,
 	}
-	r.storage.posts[parent].Comments = append(r.storage.posts[parent].Comments, &newComment)
-	r.storage.comments[parent] = append(r.storage.comments[parent], &newComment)
+
+	_, existsPost := r.storage.posts[postid]
+	_, existsComment := r.storage.comments[parentid]
+
+	if parentid == "" {
+		r.storage.comments[newComment.ID] = &newComment
+		r.storage.postComments[postid] = append(r.storage.postComments[postid], newComment.ID)
+	}
+	if existsPost && (existsComment) {
+		r.storage.comments[newComment.ID] = &newComment
+		r.storage.childrenMap[parentid] = append(r.storage.childrenMap[parentid], newComment.ID)
+	}
 	return &newComment, nil
 }
 
@@ -55,6 +62,25 @@ func (r *queryResolver) Posts(ctx context.Context) ([]*model.Post, error) {
 // Post is the resolver for the post field.
 func (r *queryResolver) Post(ctx context.Context, id string) (*model.Post, error) {
 	return r.storage.posts[id], nil
+}
+
+// Comments is the resolver for the comments field.
+func (r *queryResolver) Comments(ctx context.Context, id string) ([]*model.Comment, error) {
+	var allComments []*model.Comment
+	for _, commentid := range r.storage.postComments[id] {
+		allComments = append(allComments, r.Recourse(commentid)...)
+	}
+	return allComments, nil
+}
+
+
+func (r *queryResolver) Recourse(commentid string) ([]*model.Comment) {
+	var current []*model.Comment
+	current = append(current, r.storage.comments[commentid])
+	for _, id := range r.storage.childrenMap[commentid] {
+		current = append(current, r.Recourse(id)...)
+	}
+	return current
 }
 
 // Mutation returns MutationResolver implementation.

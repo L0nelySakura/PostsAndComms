@@ -10,19 +10,24 @@ import (
 
 
 type Storage struct{
-	posts     map [string] *model.Post
-	comments  map[string][]*model.Comment
+	posts     map[string]*model.Post
+	comments  map[string]*model.Comment
+
+    childrenMap   map[string][]string
+    postComments  map[string][]string
 }
 
 func NewStorage() *Storage {
 	return &Storage{
 		posts:    make(map[string]*model.Post),
-		comments: make(map[string][]*model.Comment),
+		comments: make(map[string]*model.Comment),
+		
+		childrenMap: make(map[string][]string),
+		postComments: make(map[string][]string),
 	}
 }
 
 type Resolver struct{
-	posts []*model.Post
 	storage Storage
 }
 
