@@ -8,18 +8,23 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"reflect"
 
 	"github.com/LonelySakura/surely/graph/model"
 )
 
 // CreatePost is the resolver for the createPost field.
-func (r *mutationResolver) CreatePost(ctx context.Context, title string, content string, author string) (*model.Post, error) {
+func (r *mutationResolver) CreatePost(ctx context.Context, title string, content string, author string, commentsEnabled *bool) (*model.Post, error) {
+	enable := true
+	if !reflect.ValueOf(commentsEnabled).IsNil() {
+		enable = *commentsEnabled
+	}
 	newPost := model.Post{
 		ID:              fmt.Sprintf("T%d", rand.Int()),
 		Title:           title,
 		Content:         content,
 		Author:          author,
-		CommentsEnabled: true,
+		CommentsEnabled: enable,
 	}
 
 	r.storage.posts[newPost.ID] = &newPost
@@ -28,6 +33,10 @@ func (r *mutationResolver) CreatePost(ctx context.Context, title string, content
 
 // CreateComment is the resolver for the createComment field.
 func (r *mutationResolver) CreateComment(ctx context.Context, content string, author string, postid string, parentid string) (*model.Comment, error) {
+	if len(content) >= 2000 {
+		return nil, fmt.Errorf("ERROR: Comment is too long")
+	}
+
 	newComment := model.Comment{
 		ID:       fmt.Sprintf("T%d", rand.Int()),
 		Content:  content,
@@ -36,14 +45,21 @@ func (r *mutationResolver) CreateComment(ctx context.Context, content string, au
 		Parentid: parentid,
 	}
 
-	_, existsPost := r.storage.posts[postid]
+	post, existsPost := r.storage.posts[postid]
 	_, existsComment := r.storage.comments[parentid]
 
+	if !existsPost {
+		return nil, fmt.Errorf("ERROR: Parent post not found")
+	}
+	if !post.CommentsEnabled {
+		return nil, fmt.Errorf("ERROR: Comments are disabled on this post")
+	}
 	if parentid == "" {
 		r.storage.comments[newComment.ID] = &newComment
 		r.storage.postComments[postid] = append(r.storage.postComments[postid], newComment.ID)
-	}
-	if existsPost && (existsComment) {
+	} else if !existsComment {
+		return nil, fmt.Errorf("ERROR: Parent comment not found")
+	} else {
 		r.storage.comments[newComment.ID] = &newComment
 		r.storage.childrenMap[parentid] = append(r.storage.childrenMap[parentid], newComment.ID)
 	}
@@ -61,26 +77,39 @@ func (r *queryResolver) Posts(ctx context.Context) ([]*model.Post, error) {
 
 // Post is the resolver for the post field.
 func (r *queryResolver) Post(ctx context.Context, id string) (*model.Post, error) {
-	return r.storage.posts[id], nil
+	currentPost, exists := r.storage.posts[id]
+	if !exists {
+		return nil, fmt.Errorf("ERROR: Post not found")
+	}
+	return currentPost, nil
 }
 
 // Comments is the resolver for the comments field.
-func (r *queryResolver) Comments(ctx context.Context, id string) ([]*model.Comment, error) {
-	var allComments []*model.Comment
-	for _, commentid := range r.storage.postComments[id] {
-		allComments = append(allComments, r.Recourse(commentid)...)
+func (r *queryResolver) Comments(ctx context.Context, id string, limit *int32, offset *int32) ([]*model.Comment, error) {
+	l := 10
+	if !reflect.ValueOf(limit).IsNil() {
+		l = int(*limit)
 	}
-	return allComments, nil
-}
-
-
-func (r *queryResolver) Recourse(commentid string) ([]*model.Comment) {
-	var current []*model.Comment
-	current = append(current, r.storage.comments[commentid])
-	for _, id := range r.storage.childrenMap[commentid] {
-		current = append(current, r.Recourse(id)...)
+	o := 0
+	if !reflect.ValueOf(offset).IsNil() {
+		o = int(*offset)
 	}
-	return current
+	rootComments := r.storage.postComments[id]
+	start := o
+	if start > len(rootComments) {
+		start = len(rootComments)
+	}
+	end := start + l
+	if end > len(rootComments) {
+		end = len(rootComments)
+	}
+	paginatedID := rootComments[start:end]
+
+	var result []*model.Comment
+	for _, commentid := range paginatedID {
+		result = append(result, r.commentTree(commentid)...)
+	}
+	return result, nil
 }
 
 // Mutation returns MutationResolver implementation.
@@ -91,3 +120,4 @@ func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
+

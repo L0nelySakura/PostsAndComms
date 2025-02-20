@@ -18,10 +18,10 @@ type Comment {
 type Query {
   posts: [Post!]!
   post(id: ID!): Post
-  comments(id: ID!): [Comment!]!
+  comments(id: ID!, limit: Int = 10, offset: Int = 0): [Comment!]!
 }
 
 type Mutation {
-  createPost(title: String!, content: String!, author: String!): Post!
+  createPost(title: String!, content: String!, author: String!, commentsEnabled: Boolean): Post!
   createComment(content: String!, author: String!, postid: ID!, parentid: ID!): Comment!
 }

@@ -57,7 +57,7 @@ type ComplexityRoot struct {
 
 	Mutation struct {
 		CreateComment func(childComplexity int, content string, author string, postid string, parentid string) int
-		CreatePost    func(childComplexity int, title string, content string, author string) int
+		CreatePost    func(childComplexity int, title string, content string, author string, commentsEnabled *bool) int
 	}
 
 	Post struct {
@@ -69,20 +69,20 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Comments func(childComplexity int, id string) int
+		Comments func(childComplexity int, id string, limit *int32, offset *int32) int
 		Post     func(childComplexity int, id string) int
 		Posts    func(childComplexity int) int
 	}
 }
 
 type MutationResolver interface {
-	CreatePost(ctx context.Context, title string, content string, author string) (*model.Post, error)
+	CreatePost(ctx context.Context, title string, content string, author string, commentsEnabled *bool) (*model.Post, error)
 	CreateComment(ctx context.Context, content string, author string, postid string, parentid string) (*model.Comment, error)
 }
 type QueryResolver interface {
 	Posts(ctx context.Context) ([]*model.Post, error)
 	Post(ctx context.Context, id string) (*model.Post, error)
-	Comments(ctx context.Context, id string) ([]*model.Comment, error)
+	Comments(ctx context.Context, id string, limit *int32, offset *int32) ([]*model.Comment, error)
 }
 
 type executableSchema struct {
@@ -161,7 +161,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CreatePost(childComplexity, args["title"].(string), args["content"].(string), args["author"].(string)), true
+		return e.complexity.Mutation.CreatePost(childComplexity, args["title"].(string), args["content"].(string), args["author"].(string), args["commentsEnabled"].(*bool)), true
 
 	case "Post.author":
 		if e.complexity.Post.Author == nil {
@@ -208,7 +208,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.Comments(childComplexity, args["id"].(string)), true
+		return e.complexity.Query.Comments(childComplexity, args["id"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
 
 	case "Query.post":
 		if e.complexity.Query.Post == nil {
@@ -447,6 +447,11 @@ func (ec *executionContext) field_Mutation_createPost_args(ctx context.Context, 
 		return nil, err
 	}
 	args["author"] = arg2
+	arg3, err := ec.field_Mutation_createPost_argsCommentsEnabled(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["commentsEnabled"] = arg3
 	return args, nil
 }
 func (ec *executionContext) field_Mutation_createPost_argsTitle(
@@ -488,6 +493,19 @@ func (ec *executionContext) field_Mutation_createPost_argsAuthor(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Mutation_createPost_argsCommentsEnabled(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*bool, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("commentsEnabled"))
+	if tmp, ok := rawArgs["commentsEnabled"]; ok {
+		return ec.unmarshalOBoolean2ᚖbool(ctx, tmp)
+	}
+
+	var zeroVal *bool
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -519,6 +537,16 @@ func (ec *executionContext) field_Query_comments_args(ctx context.Context, rawAr
 		return nil, err
 	}
 	args["id"] = arg0
+	arg1, err := ec.field_Query_comments_argsLimit(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	arg2, err := ec.field_Query_comments_argsOffset(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg2
 	return args, nil
 }
 func (ec *executionContext) field_Query_comments_argsID(
@@ -531,6 +559,32 @@ func (ec *executionContext) field_Query_comments_argsID(
 	}
 
 	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_comments_argsLimit(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*int32, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("limit"))
+	if tmp, ok := rawArgs["limit"]; ok {
+		return ec.unmarshalOInt2ᚖint32(ctx, tmp)
+	}
+
+	var zeroVal *int32
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_comments_argsOffset(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*int32, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("offset"))
+	if tmp, ok := rawArgs["offset"]; ok {
+		return ec.unmarshalOInt2ᚖint32(ctx, tmp)
+	}
+
+	var zeroVal *int32
 	return zeroVal, nil
 }
 
@@ -891,7 +945,7 @@ func (ec *executionContext) _Mutation_createPost(ctx context.Context, field grap
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().CreatePost(rctx, fc.Args["title"].(string), fc.Args["content"].(string), fc.Args["author"].(string))
+		return ec.resolvers.Mutation().CreatePost(rctx, fc.Args["title"].(string), fc.Args["content"].(string), fc.Args["author"].(string), fc.Args["commentsEnabled"].(*bool))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1365,7 +1419,7 @@ func (ec *executionContext) _Query_comments(ctx context.Context, field graphql.C
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Comments(rctx, fc.Args["id"].(string))
+		return ec.resolvers.Query().Comments(rctx, fc.Args["id"].(string), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -4567,6 +4621,22 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 		return graphql.Null
 	}
 	res := graphql.MarshalBoolean(*v)
+	return res
+}
+
+func (ec *executionContext) unmarshalOInt2ᚖint32(ctx context.Context, v any) (*int32, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalInt32(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOInt2ᚖint32(ctx context.Context, sel ast.SelectionSet, v *int32) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	res := graphql.MarshalInt32(*v)
 	return res
 }
 
